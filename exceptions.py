@@ -18,3 +18,6 @@ class ValidationError(Exception):
 
 class OtherError(Exception):
     pass
+
+class EmptyResponse(Exception):
+    pass
