@@ -1,5 +1,6 @@
 import requests
 import json
+import exceptions
 
 
 class Client(object):
@@ -11,21 +12,43 @@ class Client(object):
             self.headers['apikey'] = api_key
         self.api_base = base
 
+    @staticmethod
+    def _request(method="GET", url='https://api.freecurrencyapi.com/v1', headers=dict(), params=dict()):
+        response = requests.request(method, url, headers=headers, params=params)
+        if response.status_code == 200:
+            return response
+        elif response.status_code == 429:
+            if 'x-ratelimit-remaining-quota-month' in response.headers:
+                quota = response.headers['x-ratelimit-remaining-quota-month']
+                if int(quota) <= 0:
+                    raise exceptions.QuotaExceeded(response.text)
+                raise exceptions.RateLimitExceeded(response.text)
+        elif response.status_code == 403:
+            raise exceptions.NotAllowed(response.text)
+
+        elif response.status_code == 401:
+            raise exceptions.IncorrectApikey(response.text)
+
+        elif response.status_code == 404:
+            raise exceptions.NotFound(response.text)
+
+        elif response.status_code == 422:
+            raise exceptions.ValidationError(response.text)
+
+        else:
+            raise exceptions.OtherError(response.text)
+
     def status(self):
-        method = 'GET'
         url = self.api_base + '/status'
-        response = requests.request(method, url, headers=self.headers)
+        response = self._request(url=url, headers=self.headers)
         status = response.status_code
         response_obj = json.loads(response.text)
         return status, response_obj['quotas']
 
-    def get_currencies(self, currencies=None, more_info=False):
-        if currencies is None:
-            currencies = []
-        method = 'GET'
+    def get_currencies(self, currencies=[], more_info=False):
         url = self.api_base + '/currencies'
         params = {'currencies': ','.join(currencies)}
-        response = requests.request(method, url, headers=self.headers, params=params)
+        response = self._request(url=url, headers=self.headers, params=params)
         response_obj = json.loads(response.text)
         response_data = dict(response_obj['data'])
         for key, value in response_data.items():
@@ -34,22 +57,16 @@ class Client(object):
             else:
                 print(key)
 
-    def latest(self, base_currency=None, currencies=None):
-        if currencies is None:
-            currencies = []
-        method = 'GET'
+    def latest(self, base_currency=None, currencies=[]):
         url = self.api_base + '/latest'
         params = {'base': base_currency, 'currencies': ','.join(currencies)}
-        response = requests.request(method, url, headers=self.headers, params=params)
+        response = self._request(url=url, headers=self.headers, params=params)
         response_obj = json.loads(response.text)
         return response_obj['data']
 
-    def historical(self, date, base_currency=None, currencies=None):
-        if currencies is None:
-            currencies = []
-        method = 'GET'
+    def historical(self, date, base_currency=None, currencies=[]):
         url = self.api_base + '/historical'
         params = {'date': date, 'base': base_currency, 'currencies': ','.join(currencies)}
-        response = requests.request(method, url, headers=self.headers, params=params)
+        response = self._request(url=url, headers=self.headers, params=params)
         response_obj = json.loads(response.text)
         return response_obj['data']
